@@ -11,5 +11,5 @@ This project tackles a **linear regression** use case aligned with that mission:
 ## Repository structure
 
 - **summative/linear_regression/** — Linear regression task: notebook (`multivariate.ipynb`) and dataset.
-- **summative/API/** — Leave empty for now.
-- **summative/FlutterApp/** — Leave empty for now.
+- **summative/API/** — Left empty for now.
+- **summative/FlutterApp/** — Left empty for now.
