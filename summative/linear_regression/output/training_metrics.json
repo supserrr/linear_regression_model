@@ -1,0 +1,5 @@
+{
+  "model": "LinearRegression",
+  "test_mse": 0.052645639423904565,
+  "test_r2": 0.8377730666997146
+}

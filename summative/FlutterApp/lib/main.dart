@@ -2,23 +2,20 @@ import 'dart:convert';
 import 'dart:ui' show ImageFilter;
 
 import 'package:device_price_app/app_theme.dart';
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:glass_kit/glass_kit.dart';
 import 'package:http/http.dart' as http;
 
-/// Set at build time: `flutter run --dart-define=API_BASE_URL=http://192.168.1.5:8000`
-/// (use your computer's LAN IP on a physical phone).
+/// Override at build time, e.g. `flutter run --dart-define=API_BASE_URL=https://other.example.com`
 const String _kApiBaseUrlEnv = String.fromEnvironment('API_BASE_URL');
 
-/// Android emulator: `127.0.0.1` is the emulator itself, not your Mac — use host alias.
+const String _kDefaultApiBaseUrl =
+    'https://linear-regression-model-0nn0.onrender.com';
+
 String get kApiBaseUrl {
   if (_kApiBaseUrlEnv.isNotEmpty) return _kApiBaseUrlEnv;
-  if (defaultTargetPlatform == TargetPlatform.android) {
-    return 'http://10.0.2.2:8000';
-  }
-  return 'http://127.0.0.1:8000';
+  return _kDefaultApiBaseUrl;
 }
 
 /// Matches `top_brands` in `model_metadata.json` plus "Other" for rare brands.
@@ -46,7 +43,7 @@ class DevicePriceApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Used price',
+      title: 'Used resale score',
       theme: buildAppTheme(),
       home: const PredictionFormPage(),
     );
@@ -81,6 +78,8 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
 
   bool _loading = false;
   double? _predictedPrice;
+  /// Normalized new price from the last successful request (for user-friendly context).
+  double? _lastReferenceNewPrice;
   String? _errorText;
 
   @override
@@ -107,12 +106,59 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
     );
   }
 
+  void _showWhatWePredictDialog() {
+    final body = Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.45);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('What this app predicts'),
+        content: SingleChildScrollView(
+          child: Text.rich(
+            TextSpan(
+              style: body,
+              children: const [
+                TextSpan(
+                  text: 'The model returns a normalized used price: one number on the '
+                      'same scale as the target column in the training data (second-hand '
+                      'handheld devices from a public dataset).\n\n',
+                ),
+                TextSpan(
+                  text: 'It is not a bank quote in a named currency. The dataset stores '
+                      'this score as-is; we do not convert it to cash in the app.\n\n',
+                ),
+                TextSpan(text: 'How to read it:\n'),
+                TextSpan(
+                  text: '• Higher score means relatively more “expensive” on that '
+                      'training scale.\n'
+                      '• Try two different inputs and see which score is higher.\n'
+                      '• Normalized new price must stay on the dataset’s scale '
+                      '(the model was trained with that field).\n\n',
+                ),
+                TextSpan(
+                  text: 'Use this for learning and relative comparison, not as an '
+                      'official listing price.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _loading = true;
       _predictedPrice = null;
+      _lastReferenceNewPrice = null;
       _errorText = null;
     });
 
@@ -151,6 +197,7 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
         final price = raw is num ? raw.toDouble() : double.tryParse('$raw');
         setState(() {
           _predictedPrice = price;
+          _lastReferenceNewPrice = double.parse(_newPrice.text.trim());
           _errorText = null;
         });
       } else {
@@ -158,6 +205,7 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
         setState(() {
           _errorText = res.body.isNotEmpty ? res.body : msg;
           _predictedPrice = null;
+          _lastReferenceNewPrice = null;
         });
         _showSnack(msg);
       }
@@ -166,6 +214,7 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
       setState(() {
         _errorText = e.toString();
         _predictedPrice = null;
+        _lastReferenceNewPrice = null;
       });
       _showSnack('Could not reach the API. Check the server and URL.');
     } finally {
@@ -197,14 +246,22 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
         child: CustomScrollView(
           slivers: [
             SliverAppBar.large(
-              title: const Text('Used price'),
+              title: const Text('Used resale score'),
               backgroundColor: Colors.transparent,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.info_outline_rounded),
+                  tooltip: 'What are we predicting?',
+                  onPressed: _showWhatWePredictDialog,
+                ),
+              ],
             ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               sliver: SliverToBoxAdapter(
                 child: Text(
-                  'Estimate normalized resale from your device specs.',
+                  'Get a normalized used-price score from your specs (training-data scale, '
+                  'not a currency amount). Tap (i) for details.',
                   style: theme.textTheme.bodyLarge?.copyWith(
                     color: cs.onSurfaceVariant,
                     height: 1.35,
@@ -382,7 +439,7 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                             'Normalized new price',
                             icon: Icons.price_change_outlined,
                             helperText:
-                                'Same scale as in the training dataset (log-normalized new price).',
+                                'Use the same numeric scale as the dataset column (not raw shop price).',
                           ),
                         ],
                       ),
@@ -400,7 +457,7 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                               )
                             : const Icon(Icons.analytics_outlined),
                         label: Text(
-                          _loading ? 'Working…' : 'Estimate price',
+                          _loading ? 'Working…' : 'Get score',
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -408,11 +465,13 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                         duration: const Duration(milliseconds: 320),
                         switchInCurve: Curves.easeOutCubic,
                         switchOutCurve: Curves.easeInCubic,
-                        child: _predictedPrice != null
+                        child: _predictedPrice != null &&
+                                _lastReferenceNewPrice != null
                             ? _ResultCard(
                                 key: ValueKey(_predictedPrice),
                                 width: panelW,
                                 price: _predictedPrice!,
+                                referenceNewPrice: _lastReferenceNewPrice!,
                               )
                             : const SizedBox.shrink(),
                       ),
@@ -566,19 +625,31 @@ class _ResultCard extends StatelessWidget {
     super.key,
     required this.width,
     required this.price,
+    required this.referenceNewPrice,
   });
 
   final double width;
   final double price;
+  final double referenceNewPrice;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: cs.onSurfaceVariant,
+      height: 1.35,
+    );
+    final gap = price - referenceNewPrice;
+    final gapLabel = gap <= 0
+        ? 'Used score is ${gap.abs().toStringAsFixed(4)} below your new-price score '
+            '(typical depreciation on this scale).'
+        : 'Used score is ${gap.toStringAsFixed(4)} above your new-price score on '
+            'the training scale (unusual; check inputs).';
 
     return GlassContainer.frostedGlass(
       width: width,
-      height: 168,
+      height: 300,
       borderRadius: BorderRadius.circular(18),
       blur: 18,
       frostedOpacity: 0.16,
@@ -604,7 +675,7 @@ class _ResultCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Estimated normalized used price',
+                  'Normalized used price (model)',
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: AppPalette.ink,
                   ),
@@ -612,7 +683,7 @@ class _ResultCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             price.toStringAsFixed(4),
             style: theme.textTheme.headlineMedium?.copyWith(
@@ -622,6 +693,22 @@ class _ResultCard extends StatelessWidget {
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
+          const SizedBox(height: 6),
+          Text(
+            'Training-data scale — not a currency line item.',
+            style: muted,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Your normalized new price (input): '
+            '${referenceNewPrice.toStringAsFixed(4)}',
+            style: muted?.copyWith(
+              fontFamily: 'monospace',
+              fontSize: (muted.fontSize ?? 12) - 0.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(gapLabel, style: muted),
         ],
       ),
     );

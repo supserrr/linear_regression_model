@@ -1,4 +1,4 @@
-"""FastAPI service for used-device normalized price prediction."""
+"""FastAPI service for used-device normalized price prediction (linear regression)."""
 from __future__ import annotations
 
 import json
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_DIR = Path(__file__).resolve().parent.parent / "linear_regression" / "output"
 MODEL_DIR = Path(os.environ.get("MODEL_DIR", str(_DEFAULT_DIR))).resolve()
+MODEL_FILE = os.environ.get("MODEL_FILE", "linear_regression_model.pkl")
 
 _meta: dict[str, Any] | None = None
 _scaler: Any = None
@@ -30,7 +31,7 @@ def _load_artifacts() -> None:
     global _meta, _scaler, _model
     meta_path = MODEL_DIR / "model_metadata.json"
     scaler_path = MODEL_DIR / "scaler.pkl"
-    model_path = MODEL_DIR / "best_model.pkl"
+    model_path = MODEL_DIR / MODEL_FILE
 
     for p in (meta_path, scaler_path, model_path):
         if not p.is_file():
@@ -45,7 +46,7 @@ def _load_artifacts() -> None:
     with open(model_path, "rb") as f:
         _model = pickle.load(f)
 
-    logger.info("Loaded model artifacts from %s", MODEL_DIR)
+    logger.info("Loaded model artifacts from %s (%s)", MODEL_DIR, MODEL_FILE)
 
 
 @asynccontextmanager
@@ -60,7 +61,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Used device price API",
-    description="Predicts normalized used price from device features (Task 2 summative).",
+    description="Predicts normalized used price from device features (linear regression).",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -97,10 +98,33 @@ class PredictResponse(BaseModel):
     normalized_used_price: float
 
 
+class MetricsResponse(BaseModel):
+    model: str
+    test_mse: float
+    test_r2: float
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     ok = _meta is not None and _scaler is not None and _model is not None
     return {"status": "ok" if ok else "not_ready"}
+
+
+@app.get("/metrics", response_model=MetricsResponse)
+def metrics() -> MetricsResponse:
+    path = MODEL_DIR / "training_metrics.json"
+    if not path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="training_metrics.json not found; run export_model_metadata.py",
+        )
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    return MetricsResponse(
+        model=str(data["model"]),
+        test_mse=float(data["test_mse"]),
+        test_r2=float(data["test_r2"]),
+    )
 
 
 @app.post("/predict", response_model=PredictResponse)

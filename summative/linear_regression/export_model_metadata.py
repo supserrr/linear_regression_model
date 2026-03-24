@@ -1,15 +1,17 @@
 """
-One-time export of training metadata for the FastAPI predictor.
+Export training metadata and test metrics for the FastAPI predictor.
 Replicates preprocessing in multivariate.ipynb (random_state=42).
 Run from this directory: python export_model_metadata.py
 """
 from __future__ import annotations
 
 import json
+import pickle
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
@@ -44,7 +46,7 @@ def main() -> None:
     features = [col for col in df_model.columns if col != target]
     x = df_model[features]
     y = df_model[target]
-    x_train, _x_test, _y_train, _y_test = train_test_split(
+    x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=0.2, random_state=42
     )
 
@@ -63,6 +65,31 @@ def main() -> None:
         json.dump(meta, f, indent=2)
 
     print(f"Wrote {out_path} ({len(meta['feature_columns'])} features)")
+
+    scaler_path = OUTPUT_DIR / "scaler.pkl"
+    model_path = OUTPUT_DIR / "linear_regression_model.pkl"
+    metrics_path = OUTPUT_DIR / "training_metrics.json"
+    if scaler_path.is_file() and model_path.is_file():
+        with open(scaler_path, "rb") as f:
+            scaler = pickle.load(f)
+        with open(model_path, "rb") as f:
+            lr_model = pickle.load(f)
+        cols = list(x_train.columns)
+        x_test_scaled = scaler.transform(x_test[cols])
+        y_pred = lr_model.predict(pd.DataFrame(x_test_scaled, columns=cols))
+        metrics = {
+            "model": "LinearRegression",
+            "test_mse": float(mean_squared_error(y_test, y_pred)),
+            "test_r2": float(r2_score(y_test, y_pred)),
+        }
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump(metrics, f, indent=2)
+        print(f"Wrote {metrics_path}")
+    else:
+        print(
+            "Skipped training_metrics.json (need scaler.pkl and "
+            "linear_regression_model.pkl from the notebook)"
+        )
 
 
 if __name__ == "__main__":

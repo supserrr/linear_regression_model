@@ -61,5 +61,6 @@ def predict_array(
 ) -> float:
     x = features[feature_columns]
     x_scaled = scaler.transform(x)
-    pred = model.predict(x_scaled)
+    x_df = pd.DataFrame(x_scaled, columns=feature_columns)
+    pred = model.predict(x_df)
     return float(pred[0])
