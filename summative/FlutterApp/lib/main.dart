@@ -4,7 +4,6 @@ import 'dart:ui' show ImageFilter;
 import 'package:device_price_app/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:glass_kit/glass_kit.dart';
 import 'package:http/http.dart' as http;
 
 /// Override at build time, e.g. `flutter run --dart-define=API_BASE_URL=https://other.example.com`
@@ -82,8 +81,30 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
   double? _lastReferenceNewPrice;
   String? _errorText;
 
+  final ScrollController _scrollController = ScrollController();
+  /// Frosted layer behind the pinned app bar when content scrolls underneath.
+  bool _headerBlurActive = false;
+
+  static const double _kHeaderBlurScrollThreshold = 20;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onHeaderScroll);
+  }
+
+  void _onHeaderScroll() {
+    if (!_scrollController.hasClients) return;
+    final next = _scrollController.offset > _kHeaderBlurScrollThreshold;
+    if (next != _headerBlurActive && mounted) {
+      setState(() => _headerBlurActive = next);
+    }
+  }
+
   @override
   void dispose() {
+    _scrollController.removeListener(_onHeaderScroll);
+    _scrollController.dispose();
     _screenSize.dispose();
     _rearCam.dispose();
     _frontCam.dispose();
@@ -244,10 +265,79 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
           ),
         ),
         child: CustomScrollView(
+          controller: _scrollController,
           slivers: [
-            SliverAppBar.large(
-              title: const Text('Used resale score'),
+            SliverAppBar(
+              pinned: true,
+              stretch: true,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              shadowColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
               backgroundColor: Colors.transparent,
+              expandedHeight: 152,
+              toolbarHeight: 64,
+              // Blur cannot live in FlexibleSpaceBar.background: that layer fades to
+              // opacity 0 when collapsed, so scrolled content would show through the
+              // pinned title and actions. Stack a separate fill behind the bar instead.
+              flexibleSpace: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: _headerBlurActive ? 1 : 0,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOut,
+                        child: ClipRect(
+                          child: ShaderMask(
+                            blendMode: BlendMode.dstIn,
+                            shaderCallback: (Rect bounds) {
+                              return const LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Color(0xFFFFFFFF),
+                                  Color(0xFFFFFFFF),
+                                  Color(0x00FFFFFF),
+                                ],
+                                stops: [0.0, 0.74, 1.0],
+                              ).createShader(bounds);
+                            },
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.82),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  FlexibleSpaceBar(
+                    collapseMode: CollapseMode.pin,
+                    stretchModes: const [
+                      StretchMode.fadeTitle,
+                      StretchMode.zoomBackground,
+                    ],
+                    centerTitle: false,
+                    titlePadding: const EdgeInsetsDirectional.only(
+                      start: 16,
+                      bottom: 16,
+                    ),
+                    title: Text(
+                      'Used resale score',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppPalette.ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.info_outline_rounded),
@@ -636,35 +726,29 @@ class _ResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final muted = theme.textTheme.bodySmall?.copyWith(
-      color: cs.onSurfaceVariant,
-      height: 1.35,
-    );
     final gap = price - referenceNewPrice;
+    final unusual = gap > 0;
     final gapLabel = gap <= 0
-        ? 'Used score is ${gap.abs().toStringAsFixed(4)} below your new-price score '
-            '(typical depreciation on this scale).'
-        : 'Used score is ${gap.toStringAsFixed(4)} above your new-price score on '
-            'the training scale (unusual; check inputs).';
+        ? 'About ${gap.abs().toStringAsFixed(4)} below the new-price score you '
+            'entered — that pattern is common on this training scale.'
+        : 'About ${gap.toStringAsFixed(4)} above the new-price score you entered. '
+            'The model does not force used to stay below new, so that can happen. '
+            'If it surprises you, double-check that your inputs match the dataset scale.';
 
-    return GlassContainer.frostedGlass(
+    final secondary = theme.textTheme.bodyMedium?.copyWith(
+      height: 1.4,
+      color: AppPalette.ink.withValues(alpha: 0.74),
+    );
+    final insight = theme.textTheme.bodyMedium?.copyWith(
+      height: 1.4,
+      color: AppPalette.ink.withValues(alpha: 0.92),
+    );
+
+    return _FrostedPanel(
       width: width,
-      height: 300,
-      borderRadius: BorderRadius.circular(18),
-      blur: 18,
-      frostedOpacity: 0.16,
-      borderWidth: 1.4,
-      borderColor: AppPalette.blue.withValues(alpha: 0.4),
-      borderGradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          AppPalette.blue.withValues(alpha: 0.65),
-          AppPalette.blue.withValues(alpha: 0.12),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-      alignment: Alignment.topLeft,
+      margin: EdgeInsets.zero,
+      blurSigma: 16,
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -683,7 +767,7 @@ class _ResultCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             price.toStringAsFixed(4),
             style: theme.textTheme.headlineMedium?.copyWith(
@@ -693,22 +777,59 @@ class _ResultCard extends StatelessWidget {
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             'Training-data scale — not a currency line item.',
-            style: muted,
+            style: secondary,
           ),
-          const SizedBox(height: 14),
-          Text(
-            'Your normalized new price (input): '
-            '${referenceNewPrice.toStringAsFixed(4)}',
-            style: muted?.copyWith(
-              fontFamily: 'monospace',
-              fontSize: (muted.fontSize ?? 12) - 0.5,
+          const SizedBox(height: 12),
+          Text.rich(
+            TextSpan(
+              style: secondary,
+              children: [
+                const TextSpan(text: 'Your normalized new price (input): '),
+                TextSpan(
+                  text: referenceNewPrice.toStringAsFixed(4),
+                  style: secondary?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppPalette.ink.withValues(alpha: 0.9),
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 10),
-          Text(gapLabel, style: muted),
+          const SizedBox(height: 12),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: unusual
+                  ? cs.primaryContainer.withValues(alpha: 0.92)
+                  : cs.surfaceContainerHighest.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: unusual
+                    ? cs.primary.withValues(alpha: 0.38)
+                    : cs.outline.withValues(alpha: 0.28),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    unusual
+                        ? Icons.info_outline_rounded
+                        : Icons.trending_down_rounded,
+                    size: 22,
+                    color: unusual ? cs.primary : cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(gapLabel, style: insight)),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
