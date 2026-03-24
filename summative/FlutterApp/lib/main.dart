@@ -475,36 +475,50 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                             _screenSize,
                             'Screen size',
                             icon: Icons.aspect_ratio,
+                            minValue: 5.0,
+                            maxValue: 31.0,
                           ),
                           _numField(
                             _rearCam,
                             'Rear camera (MP)',
                             icon: Icons.camera_rear_outlined,
+                            minValue: 0.0,
+                            maxValue: 50.0,
                           ),
                           _numField(
                             _frontCam,
                             'Front camera (MP)',
                             icon: Icons.camera_front_outlined,
+                            minValue: 0.0,
+                            maxValue: 35.0,
                           ),
                           _numField(
                             _internalMem,
                             'Internal memory (GB)',
                             icon: Icons.sd_storage_outlined,
+                            minValue: 0.01,
+                            maxValue: 2048.0,
                           ),
                           _numField(
                             _ram,
                             'RAM (GB)',
                             icon: Icons.speed_outlined,
+                            minValue: 0.02,
+                            maxValue: 16.0,
                           ),
                           _numField(
                             _battery,
                             'Battery (mAh)',
                             icon: Icons.battery_charging_full_outlined,
+                            minValue: 400.0,
+                            maxValue: 10000.0,
                           ),
                           _numField(
                             _weight,
                             'Weight (g)',
                             icon: Icons.scale_outlined,
+                            minValue: 60.0,
+                            maxValue: 900.0,
                           ),
                         ],
                       ),
@@ -518,11 +532,15 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                             _releaseYear,
                             'Release year',
                             icon: Icons.calendar_today_outlined,
+                            minValue: 2012,
+                            maxValue: 2021,
                           ),
                           _intField(
                             _daysUsed,
                             'Days used',
                             icon: Icons.schedule_outlined,
+                            minValue: 80,
+                            maxValue: 1200,
                           ),
                           _numField(
                             _newPrice,
@@ -530,6 +548,8 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                             icon: Icons.price_change_outlined,
                             helperText:
                                 'Use the same numeric scale as the dataset column (not raw shop price).',
+                            minValue: 2.5,
+                            maxValue: 8.5,
                           ),
                         ],
                       ),
@@ -547,7 +567,7 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                               )
                             : const Icon(Icons.analytics_outlined),
                         label: Text(
-                          _loading ? 'Working…' : 'Get score',
+                          _loading ? 'Predicting…' : 'Predict',
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -662,6 +682,8 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
     String label, {
     IconData? icon,
     String? helperText,
+    double? minValue,
+    double? maxValue,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -678,7 +700,14 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
         ),
         validator: (s) {
           if (s == null || s.trim().isEmpty) return 'Required';
-          if (double.tryParse(s.trim()) == null) return 'Enter a number';
+          final v = double.tryParse(s.trim());
+          if (v == null) return 'Enter a number';
+          if (minValue != null && v < minValue) {
+            return 'Must be ≥ $minValue (API range)';
+          }
+          if (maxValue != null && v > maxValue) {
+            return 'Must be ≤ $maxValue (API range)';
+          }
           return null;
         },
       ),
@@ -689,6 +718,8 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
     TextEditingController c,
     String label, {
     IconData? icon,
+    int? minValue,
+    int? maxValue,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -702,7 +733,14 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
         ),
         validator: (s) {
           if (s == null || s.trim().isEmpty) return 'Required';
-          if (int.tryParse(s.trim()) == null) return 'Enter an integer';
+          final v = int.tryParse(s.trim());
+          if (v == null) return 'Enter an integer';
+          if (minValue != null && v < minValue) {
+            return 'Must be ≥ $minValue (API range)';
+          }
+          if (maxValue != null && v > maxValue) {
+            return 'Must be ≤ $maxValue (API range)';
+          }
           return null;
         },
       ),

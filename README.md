@@ -1,52 +1,63 @@
 # Linear Regression Model
 
-## Mission
+## Mission and problem
 
-My mission is to use technology as a tool for inclusion and empowerment in Africa. I believe software should not only solve technical problems but also address the unique social challenges of our communities.
+My mission is to use technology as a tool for inclusion and empowerment in Africa.  
+This project predicts normalized used handheld device prices from device and usage features.  
+**Dataset:** [Used Handheld Device Data (Kaggle)](https://www.kaggle.com/datasets/ahsan81/used-handheld-device-data).  
+The use case is specific (second-hand device pricing), **not** generic, and **not** the house-prediction example from class.
 
-## Problem
+### Visualizations (README)
 
-This project tackles a **linear regression** use case aligned with that mission: **predicting used handheld device prices** from device and usage features. The goal is to support transparency and affordability in device markets—relevant to inclusion and access in communities where second-hand devices are often the primary path to connectivity. The use case is specific (used device pricing and features), is **not** generic, and is **not** the house-prediction example from class.
+![Correlation heatmap — informs feature relationships](summative/linear_regression/output/viz2_correlation_heatmap.png)
 
-**Dataset:** [Used Handheld Device Data (Kaggle)](https://www.kaggle.com/datasets/ahsan81/used-handheld-device-data)
+![Feature distributions — informs scaling and model inputs](summative/linear_regression/output/viz3_feature_distributions.png)
 
-## Repository structure
+## Deployed API
+
+The inference service is hosted on Render. Interactive documentation and testing are available at the following endpoints (HTTPS, publicly routable):
+
+- **Base URL:** [https://linear-regression-model-0nn0.onrender.com](https://linear-regression-model-0nn0.onrender.com)
+- **OpenAPI / Swagger UI:** [https://linear-regression-model-0nn0.onrender.com/docs](https://linear-regression-model-0nn0.onrender.com/docs)
+- **Endpoints:** `GET /health`, `GET /metrics`, `POST /predict`
+- **Retraining:** `POST /retrain` accepts a CSV upload (multipart form); query parameter `mode` may be `replace` (default) or `append`. When the environment variable `RETRAIN_API_KEY` is set, requests must include header `X-Retrain-Key` with the same value.
+
+Cross-origin access is restricted via explicit origin lists in `CORS_ORIGINS` (configured in [`render.yaml`](render.yaml)); wildcard origins are not used.
+
+## Video demonstration
+
+*[YouTube URL to be added]*.
+
+## Repository layout
 
 | Path | Contents |
 |------|----------|
-| `summative/linear_regression/` | Task 1: `multivariate.ipynb`, `used_device_data.csv`, `output/` (model, scaler, metrics, plots) |
-| `summative/API/` | Task 2: FastAPI — `POST /predict`, `GET /health`, `GET /metrics`, `/docs` |
-| `summative/FlutterApp/` | Task 3: Flutter client (defaults to deployed API below) |
+| `summative/linear_regression/` | `multivariate.ipynb`, `used_device_data.csv`, `training_pipeline.py`, `export_model_metadata.py`, `output/` |
+| `summative/API/` | `main.py`, `prediction.py`, `preprocess.py`, `requirements.txt` |
+| `summative/FlutterApp/` | Flutter client |
 
-## Task 1 — Linear regression
+## Modeling and training
 
-Notebook: [`summative/linear_regression/multivariate.ipynb`](summative/linear_regression/multivariate.ipynb). Data cleaning, EDA, train/test split, **linear regression**; metrics on the test set (see notebook or `output/training_metrics.json`). Current `output/training_metrics.json` (linear model, test set): **test MSE ≈ 0.0526**, **test R² ≈ 0.8378** (re-run notebook/export if you retrain).
+Exploratory analysis, preprocessing, and model comparison are documented in [`summative/linear_regression/multivariate.ipynb`](summative/linear_regression/multivariate.ipynb). I fit ordinary least-squares linear regression, a decision tree, and a random forest; I also recorded train and test error across epochs using stochastic gradient descent for the linear formulation. The artifact with the lowest test mean squared error is persisted as `summative/linear_regression/output/best_model.pkl`, with companion metadata and metrics in the same directory.
 
-After changing preprocessing, from `summative/linear_regression/`: `python3 export_model_metadata.py` (updates `output/model_metadata.json` and `training_metrics.json`).
-
-## Task 2 — API (deployed + Docker)
-
-**Live API:** `https://linear-regression-model-0nn0.onrender.com` — [Swagger `/docs`](https://linear-regression-model-0nn0.onrender.com/docs), [`/health`](https://linear-regression-model-0nn0.onrender.com/health), [`/metrics`](https://linear-regression-model-0nn0.onrender.com/metrics), `POST /predict`. Free tier may cold-start (~30–60s).
-
-**Docker Hub:** publish your container image here and fill the link in the table above. Typical run (adjust image name and ensure model files are available, e.g. mount or copy `summative/linear_regression/output/`):
+To reproduce the trained artifacts after changing the CSV or code:
 
 ```bash
-docker pull <your-dockerhub-user>/<your-api-image>:<tag>
-docker run -p 8000:8000 <your-dockerhub-user>/<your-api-image>:<tag>
+cd summative/linear_regression && python3 training_pipeline.py
 ```
 
-**Local (no Docker):** `cd summative/API && python3 -m pip install -r requirements.txt && python3 -m uvicorn main:app --host 0.0.0.0 --port 8000` — docs at `http://127.0.0.1:8000/docs`. Artifacts: `../linear_regression/output/` (override with `MODEL_DIR`). scikit-learn **1.6.1** for pickles.
+The script `export_model_metadata.py` invokes the same training routine.
 
-Render blueprint: [`render.yaml`](render.yaml).
+## API service
 
-## Task 3 — Flutter
+The FastAPI application is defined under `summative/API/`. Model files are read from `summative/linear_regression/output/` by default (overridable with `MODEL_DIR`); the default serialized estimator is `best_model.pkl` (`MODEL_FILE`). Dependencies are pinned in `requirements.txt` (scikit-learn 1.6.x for compatibility with the saved pickles). Deployment is described in [`render.yaml`](render.yaml).
+
+## Flutter client
+
+The mobile client calls the deployed base URL above and posts to `/predict`. To build and run:
 
 ```bash
 cd summative/FlutterApp && flutter pub get && flutter run
 ```
 
-Default API: `https://linear-regression-model-0nn0.onrender.com`. Local API: `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000` (emulator: `http://10.0.2.2:8000`).
-
-## Task 4 — Video
-
-Show notebook/analysis, API (Docker or deployed), Flutter calling `/predict`, brief workflow. Guide: [docs/guides/video-demo-checklist.md](docs/guides/video-demo-checklist.md).
+An alternate base URL may be supplied at build time with `--dart-define=API_BASE_URL=...` if the deployment endpoint changes.

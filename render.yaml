@@ -13,3 +13,7 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
+      - key: CORS_ORIGINS
+        value: http://127.0.0.1:8000,http://localhost:8000,https://linear-regression-model-0nn0.onrender.com
+      - key: MODEL_FILE
+        value: best_model.pkl

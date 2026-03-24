@@ -1,5 +1,5 @@
 {
-  "model": "LinearRegression",
-  "test_mse": 0.052645639423904565,
-  "test_r2": 0.8377730666997146
+  "model": "RandomForestRegressor",
+  "test_mse": 0.04688114567699712,
+  "test_r2": 0.8555362879811499
 }
