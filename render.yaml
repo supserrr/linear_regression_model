@@ -1,0 +1,15 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Connect this repo in the Render dashboard → New → Blueprint → select repo, or add the file and sync.
+services:
+  - type: web
+    name: used-device-price-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: summative/API
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
