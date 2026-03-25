@@ -165,7 +165,10 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.of(ctx).pop();
+            },
             child: const Text('Got it'),
           ),
         ],
@@ -175,6 +178,8 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    HapticFeedback.mediumImpact();
 
     setState(() {
       _loading = true;
@@ -221,6 +226,7 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
           _lastReferenceNewPrice = double.parse(_newPrice.text.trim());
           _errorText = null;
         });
+        HapticFeedback.lightImpact();
       } else {
         final msg = 'Server returned ${res.statusCode}';
         setState(() {
@@ -342,7 +348,10 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                 IconButton(
                   icon: const Icon(Icons.info_outline_rounded),
                   tooltip: 'What are we predicting?',
-                  onPressed: _showWhatWePredictDialog,
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    _showWhatWePredictDialog();
+                  },
                 ),
               ],
             ),
@@ -388,8 +397,10 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                                   ),
                                 )
                                 .toList(),
-                            onChanged: (v) =>
-                                setState(() => _deviceBrand = v!),
+                            onChanged: (v) {
+                              HapticFeedback.selectionClick();
+                              setState(() => _deviceBrand = v!);
+                            },
                           ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<String>(
@@ -409,7 +420,10 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                                 child: Text('iOS'),
                               ),
                             ],
-                            onChanged: (v) => setState(() => _os = v!),
+                            onChanged: (v) {
+                              HapticFeedback.selectionClick();
+                              setState(() => _os = v!);
+                            },
                           ),
                           const SizedBox(height: 14),
                           Row(
@@ -433,8 +447,10 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                                       child: Text('No'),
                                     ),
                                   ],
-                                  onChanged: (v) =>
-                                      setState(() => _fourG = v!),
+                                  onChanged: (v) {
+                                    HapticFeedback.selectionClick();
+                                    setState(() => _fourG = v!);
+                                  },
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -457,8 +473,10 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                                       child: Text('No'),
                                     ),
                                   ],
-                                  onChanged: (v) =>
-                                      setState(() => _fiveG = v!),
+                                  onChanged: (v) {
+                                    HapticFeedback.selectionClick();
+                                    setState(() => _fiveG = v!);
+                                  },
                                 ),
                               ),
                             ],
@@ -597,6 +615,9 @@ class _PredictionFormPageState extends State<PredictionFormPage> {
                         child: Theme(
                           data: theme.copyWith(dividerColor: Colors.transparent),
                           child: ExpansionTile(
+                            onExpansionChanged: (_) {
+                              HapticFeedback.selectionClick();
+                            },
                             leading: Icon(
                               Icons.link_rounded,
                               color: cs.primary,
