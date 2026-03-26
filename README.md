@@ -26,7 +26,7 @@ Cross-origin access is restricted via explicit origin lists in `CORS_ORIGINS` (c
 
 ## Video demonstration
 
-*[YouTube URL to be added]*.
+* [Video demonstration on YouTube](https://youtu.be/W9CKvBbY34g).
 
 ## Repository layout
 
